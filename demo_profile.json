@@ -99,6 +99,82 @@
     {
       "timestamp": "2026-10-20T11:51:35.326209+00:00",
       "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-21T13:14:36.319601+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-21T13:14:55.291771+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.10.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.10.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-21T13:15:08.419882+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.19.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.1.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-21T13:15:15.944416+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.19.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.9.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-21T13:15:19.484416+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-21T13:15:22.170019+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-21T13:15:36.153795+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.19.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.0.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-21T13:15:42.304746+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.19.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.1.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-21T13:15:44.042258+00:00",
+      "action": "Restored isolated demo profile"
     }
   ]
 }

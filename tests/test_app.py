@@ -34,6 +34,15 @@ class NetworkLabTests(unittest.TestCase):
         self.assertTrue(any(command["id"] == "ipconfig" for command in response.json["commands"]))
         self.assertEqual(self.client.post("/api/commands/run", json={"id": "not-allowed"}).status_code, 404)
 
+    def test_terminal_executes_validated_network_command(self):
+        response = self.client.post("/api/commands/execute", json={"command": "ping 127.0.0.1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["result"]["command"], "ping 127.0.0.1")
+
+    def test_terminal_rejects_shell_operators(self):
+        response = self.client.post("/api/commands/execute", json={"command": "ipconfig & whoami"})
+        self.assertEqual(response.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

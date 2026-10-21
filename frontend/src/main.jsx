@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, CheckCircle2, CircleAlert, Network, Play, RotateCcw, Send, Square } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, Network, Play, RotateCcw, Send, Square, Terminal } from "lucide-react";
 import "./styles.css";
 
 // Shared API helper: keeps JSON handling and error messages consistent.
@@ -79,6 +79,7 @@ function SocketDemo({ protocol }) { const [status, setStatus] = useState({}); co
 function Commands() {
   const [commands, setCommands] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [commandInput, setCommandInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => { api("/api/commands").then(response => setCommands(response.commands)).catch(error => setError(error instanceof Error ? error.message : "Could not load commands")); }, []);
@@ -88,7 +89,16 @@ function Commands() {
     catch (error) { setError(error instanceof Error ? error.message : "Command failed"); }
     finally { setBusy(false); }
   };
-  return <main className="content"><div className="eyebrow">MODULE 02 · COMMANDS</div><h1>Network commands</h1><p className="lead">Every command is executed by the Windows backend, and its real terminal output is shown below.</p>{error && <div className="notice error">{error}</div>}<div className="command-layout"><section className="card command-list">{commands.map(command => <article className="command-row" key={command.id}><div><code>{command.command}</code><strong>{command.label}</strong><span>{command.description}</span></div><button onClick={() => run(command.id)} disabled={busy}>Run in console <Play size={14}/></button></article>)}</section><section className="card live-console"><div className="row"><div><h2>Live console</h2><p className="muted">Runs on the backend host</p></div><Badge tone={busy ? "warning" : "success"}>{busy ? "Running" : "Ready"}</Badge></div><Console>{selected ? `PS C:\\NetLab> ${selected.command}\n\n${selected.output}\n\n[exit code: ${selected.exit_code ?? "timeout"}]` : "Select a command to run it in the backend terminal."}</Console></section></div></main>;
+  const execute = async (event) => {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      setSelected((await api("/api/commands/execute", { method: "POST", body: JSON.stringify({ command: commandInput }) })).result);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Command failed");
+    } finally { setBusy(false); }
+  };
+  return <main className="content"><div className="eyebrow">MODULE 02 · COMMANDS</div><h1>Network commands</h1><p className="lead">Write a read-only networking command, request execution from the Python backend, and inspect its real terminal output.</p>{error && <div className="notice error">{error}</div>}<div className="command-layout"><div className="command-left"><section className="card command-terminal"><div className="row"><div><h2>Backend terminal</h2><p className="muted">Allowlisted commands only · shell execution is disabled</p></div><Terminal size={19}/></div><form className="terminal-form" onSubmit={execute}><input aria-label="Network command" value={commandInput} onChange={event => setCommandInput(event.target.value)} placeholder="Example: ping 127.0.0.1" spellCheck="false"/><button type="submit" disabled={busy || !commandInput.trim()}><Send size={15}/> Execute</button></form><p className="terminal-help">Try <code>ipconfig /all</code>, <code>ping 127.0.0.1</code>, or <code>nslookup example.com</code>.</p></section><section className="card command-list">{commands.map(command => <article className="command-row" key={command.id}><div><code>{command.command}</code><strong>{command.label}</strong><span>{command.description}</span></div><button onClick={() => { setCommandInput(command.command); run(command.id); }} disabled={busy}>Run in console <Play size={14}/></button></article>)}</section></div><section className="card live-console"><div className="row"><div><h2>Live console</h2><p className="muted">Runs on the backend host</p></div><Badge tone={busy ? "warning" : "success"}>{busy ? "Running" : "Ready"}</Badge></div><Console>{selected ? `PS C:\\NetLab> ${selected.command}\n\n${selected.output}\n\n[exit code: ${selected.exit_code ?? "timeout"}]` : "Enter a command or select a preset to run it in the backend terminal."}</Console></section></div></main>;
 }
 
 function Protocols() {

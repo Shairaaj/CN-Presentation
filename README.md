@@ -9,7 +9,7 @@ NetLab is a focused presentation application for two subjects: **Networking Auto
 - Bounded DNS, TCP, and gateway diagnostics with honest unavailable/inconclusive states.
 - Reversible application-owned demo profile; it never changes an operating-system adapter.
 - Real loopback-only TCP and UDP echo servers with dynamic ports, byte counts, and logs.
-- Windows networking command demonstrations with backend terminal output.
+- Windows networking command demonstrations with backend terminal output, including a validated command terminal for custom read-only requests.
 - Definitions for common networking protocols: TCP, UDP, HTTP, DNS, DHCP, and ARP.
 
 ## Project structure
@@ -50,7 +50,7 @@ Open http://127.0.0.1:5173. The Vite development proxy sends `/api` requests to 
 5. Open Commands to run a safe, fixed Windows networking command and explain its terminal output.
 6. Open Protocols to review concise definitions of common networking protocols.
 
-No API accepts arbitrary hosts, ports, or shell commands. Command demonstrations use a fixed read-only allowlist and have finite timeouts. Host details reflect the backend machine, not necessarily a student's computer.
+No API accepts arbitrary hosts, ports, or shell commands. The command terminal accepts only the read-only networking executables and arguments described by the allowlist, uses `shell=False`, and has finite timeouts. Host details reflect the backend machine, not necessarily a student's computer.
 
 ## Tests
 
