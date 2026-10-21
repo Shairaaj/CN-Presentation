@@ -1,0 +1,104 @@
+{
+  "original": {
+    "name": "Presentation demo profile",
+    "address": "192.168.10.25/24",
+    "gateway": "192.168.10.1",
+    "dns": [
+      "1.1.1.1"
+    ]
+  },
+  "current": {
+    "name": "Presentation demo profile",
+    "address": "192.168.10.25/24",
+    "gateway": "192.168.10.1",
+    "dns": [
+      "1.1.1.1"
+    ]
+  },
+  "changes": [
+    {
+      "timestamp": "2026-10-20T10:43:38.509860+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "name": "live",
+        "address": "10.0.0.5/24",
+        "gateway": "10.0.0.1",
+        "dns": [
+          "1.1.1.1"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-10-20T10:43:38.561078+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-20T10:44:06.711122+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "name": "live",
+        "address": "10.0.0.5/24",
+        "gateway": "10.0.0.1",
+        "dns": [
+          "1.1.1.1"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-10-20T10:44:06.735414+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-20T11:48:29.398657+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.10.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.10.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-20T11:48:33.173000+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-20T11:48:34.241425+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-20T11:48:35.039602+00:00",
+      "action": "Restored isolated demo profile"
+    },
+    {
+      "timestamp": "2026-10-20T11:48:36.009131+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.10.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.10.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-20T11:48:36.559303+00:00",
+      "action": "Applied to isolated demo profile",
+      "profile": {
+        "address": "192.168.10.25/24",
+        "dns": [
+          "1.1.1.1"
+        ],
+        "gateway": "192.168.10.1",
+        "name": "Presentation demo profile"
+      }
+    },
+    {
+      "timestamp": "2026-10-20T11:51:35.326209+00:00",
+      "action": "Restored isolated demo profile"
+    }
+  ]
+}
