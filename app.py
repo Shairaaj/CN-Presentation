@@ -3,8 +3,6 @@ import json
 import logging
 import os
 import platform
-import re
-import shlex
 import socket
 import subprocess
 import threading
@@ -237,13 +235,12 @@ COMMANDS = {
 }
 
 
-def run_command(command_id, args=None):
-    """Run one validated, read-only Windows networking command."""
-    command = COMMANDS[command_id] if command_id in COMMANDS else None
-    command_args = command["args"] if args is None else args
+def run_command(command_id):
+    """Run one fixed, read-only Windows networking command."""
+    command = COMMANDS[command_id]
     try:
         result = subprocess.run(
-            command_args,
+            command["args"],
             capture_output=True,
             text=True,
             encoding="oem",
@@ -254,7 +251,7 @@ def run_command(command_id, args=None):
         output = (result.stdout + result.stderr).strip()
         return {
             "id": command_id,
-            "command": " ".join(command_args),
+            "command": " ".join(command["args"]),
             "output": output or "(Command returned no output.)",
             "exit_code": result.returncode,
             "timed_out": False,
@@ -263,7 +260,7 @@ def run_command(command_id, args=None):
         output = ((exc.stdout or "") + (exc.stderr or "")).strip()
         return {
             "id": command_id,
-            "command": " ".join(command_args),
+            "command": " ".join(command["args"]),
             "output": output + ("\n" if output else "") + "Command timed out after 15 seconds.",
             "exit_code": None,
             "timed_out": True,
@@ -271,72 +268,11 @@ def run_command(command_id, args=None):
     except OSError as exc:
         return {
             "id": command_id,
-            "command": " ".join(command_args),
+            "command": " ".join(command["args"]),
             "output": f"Unable to execute command: {exc}",
             "exit_code": None,
             "timed_out": False,
         }
-
-
-def parse_custom_command(command_line):
-    """Parse a terminal request and allow only bounded networking commands."""
-    if not isinstance(command_line, str) or not command_line.strip():
-        raise ValueError("Enter a networking command.")
-    if len(command_line) > 256:
-        raise ValueError("Command must be at most 256 characters.")
-    if any(character in command_line for character in "&|<>;$`\n\r"):
-        raise ValueError("Shell operators and multiline commands are not allowed.")
-    try:
-        args = shlex.split(command_line, posix=True)
-    except ValueError as exc:
-        raise ValueError("Command has unmatched quotes.") from exc
-    if not args:
-        raise ValueError("Enter a networking command.")
-
-    executable = args[0].lower()
-    if executable not in {"ping", "ipconfig", "tracert", "nslookup", "arp", "route", "netstat"}:
-        raise ValueError("Only the listed read-only networking commands are allowed.")
-    if "/" in args[0] or "\\" in args[0]:
-        raise ValueError("Command paths are not allowed.")
-
-    integer = r"(?:[1-9]\d{0,3})"
-    target = r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}"
-    if executable == "ipconfig":
-        if args[1:] not in ([], ["/all"]):
-            raise ValueError("ipconfig accepts no arguments or /all.")
-    elif executable == "arp":
-        if args[1:] != ["-a"]:
-            raise ValueError("arp only accepts -a.")
-    elif executable == "route":
-        if args[1:] != ["print", "-4"]:
-            raise ValueError("route only accepts print -4.")
-    elif executable == "netstat":
-        if args[1:] != ["-ano"]:
-            raise ValueError("netstat only accepts -ano.")
-    elif executable == "nslookup":
-        if len(args) != 2 or not re.fullmatch(target, args[1]):
-            raise ValueError("nslookup requires one valid hostname.")
-    elif executable in {"ping", "tracert"}:
-        remaining = args[1:]
-        options = {"-n": integer, "-w": integer} if executable == "ping" else {"-h": integer}
-        target_value = None
-        index = 0
-        while index < len(remaining):
-            value = remaining[index]
-            if value in options:
-                if index + 1 >= len(remaining) or not re.fullmatch(options[value], remaining[index + 1]):
-                    raise ValueError(f"{value} requires a numeric value.")
-                index += 2
-            elif value.startswith("-"):
-                raise ValueError(f"Unsupported {executable} option.")
-            elif target_value is None and re.fullmatch(target, value):
-                target_value = value
-                index += 1
-            else:
-                raise ValueError(f"{executable} requires one valid target.")
-        if target_value is None:
-            raise ValueError(f"{executable} requires one valid target.")
-    return args
 
 
 SAMPLE_PROFILE = {"name": "Presentation demo profile", "address": "192.168.10.25/24", "gateway": "192.168.10.1", "dns": ["1.1.1.1"]}
@@ -516,17 +452,6 @@ def command_run():
     if command_id not in COMMANDS:
         return error("Unknown command", 404)
     return jsonify({"ok": True, "result": run_command(command_id)})
-
-
-@app.post("/api/commands/execute")
-def command_execute():
-    """Execute a user-entered command after applying the networking allowlist."""
-    payload = request.get_json(silent=True) or {}
-    try:
-        args = parse_custom_command(payload.get("command"))
-    except ValueError as exc:
-        return error(str(exc), 400)
-    return jsonify({"ok": True, "result": run_command("custom", args)})
 
 
 @app.get("/api/config-demo")
