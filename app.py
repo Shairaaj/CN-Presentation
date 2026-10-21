@@ -297,103 +297,256 @@ def save_profile(profile):
 # Socket Programming with Python
 # ============================================================
 
+def validate_message(message):
+    """Validate that the user message is non-empty and within the size limit."""
+    if not isinstance(message, str) or not message.strip():
+        raise ValueError("Message must not be empty.")
+    data = message.encode("utf-8")
+    if len(data) > MAX_MESSAGE:
+        raise ValueError(f"Message must be at most {MAX_MESSAGE} bytes.")
+    return data
+
+
+# ============================================================
+# PROGRAM 1: TCP Server (Presentation Slide 12)
+# Workflow: socket() -> bind() -> listen() -> accept() -> recv() -> sendall() -> close()
+# ============================================================
+def tcp_server(server):
+    """
+    TCP Echo Server routine (Presentation Slide 12).
+    Workflow: socket() -> bind() -> listen() -> accept() -> recv() -> sendall() -> close()
+    """
+    # 1. socket(): Create an IPv4 TCP stream socket
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    # 2. bind(): Attach socket to loopback IP (127.0.0.1) and dynamic port
+    # (Port 0 lets the OS pick an available port to avoid conflicts with Flask)
+    srv.bind((HOST, 0))
+
+    # 3. listen(): Ready for incoming TCP client connections
+    srv.listen(1)
+
+    # Finite timeout (0.5s) allows server to check server.running periodically
+    srv.settimeout(0.5)
+
+    server.socket = srv
+    server.port = srv.getsockname()[1]
+    server.running = True
+    server.log(f"TCP server listening on {HOST}:{server.port}")
+
+    while server.running:
+        try:
+            # 4. accept(): Blocks until a client connects, returning (conn, addr)
+            conn, addr = srv.accept()
+        except socket.timeout:
+            continue
+        except OSError:
+            break
+
+        # 5. recv() & 6. sendall(): Handle the connected client
+        with conn:
+            conn.settimeout(3.0)
+            try:
+                # recv(1024): Read incoming bytes from the TCP byte stream
+                # For short classroom demo messages, a single recv() reads the complete message
+                data = conn.recv(MAX_MESSAGE)
+                if data:
+                    conn.sendall(data)
+                    server.log(f"Echoed {len(data)} bytes")
+            except (socket.timeout, OSError) as exc:
+                server.log(f"TCP client error: {exc}")
+        # 7. close(): Handled automatically by the 'with conn' context manager
+
+
+# ============================================================
+# PROGRAM 2: TCP Client (Presentation Slides 9 & 11)
+# Workflow: socket() -> connect() -> sendall() -> recv() -> close()
+# ============================================================
+def tcp_client(port, message):
+    """
+    TCP Client routine (Presentation Slides 9 & 11).
+    Workflow: socket() -> connect() -> sendall() -> recv() -> close()
+    """
+    data = validate_message(message)
+    started = time.perf_counter()
+
+    # 1. socket(): Create an IPv4 TCP stream socket ('with' guarantees close())
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        client.settimeout(4.0)
+
+        # 2. connect(): Establish connection to the server (3-way TCP handshake)
+        client.connect((HOST, port))
+
+        # 3. sendall(): Send the message bytes
+        client.sendall(data)
+
+        # 4. recv(): Receive the echoed response bytes from the server
+        response = client.recv(MAX_MESSAGE)
+    # 5. close(): Handled automatically upon exiting the 'with client' block
+
+    if not response:
+        raise OSError("No response received from TCP server.")
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {
+        "message": response.decode("utf-8", errors="replace"),
+        "bytes": len(response),
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+# ============================================================
+# PROGRAM 3: UDP Server (Presentation Slide 13)
+# Workflow: socket(AF_INET, SOCK_DGRAM) -> bind() -> recvfrom() -> sendto() -> close()
+# ============================================================
+def udp_server(server):
+    """
+    UDP Echo Server routine (Presentation Slide 13).
+    Workflow: socket(AF_INET, SOCK_DGRAM) -> bind() -> recvfrom() -> sendto() -> close()
+    """
+    # 1. socket(): Create an IPv4 UDP datagram socket
+    srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    # 2. bind(): Attach socket to loopback IP (127.0.0.1) and dynamic port
+    srv.bind((HOST, 0))
+
+    # Finite timeout (0.5s) allows server to check server.running periodically
+    srv.settimeout(0.5)
+
+    server.socket = srv
+    server.port = srv.getsockname()[1]
+    server.running = True
+    server.log(f"UDP server listening on {HOST}:{server.port}")
+
+    while server.running:
+        try:
+            # 3. recvfrom(): Wait for datagram; returns (data, addr)
+            data, addr = srv.recvfrom(MAX_MESSAGE)
+            if data:
+                # 4. sendto(): Send datagram bytes directly to sender address
+                srv.sendto(data, addr)
+                server.log(f"Echoed {len(data)} byte datagram")
+        except socket.timeout:
+            continue
+        except OSError:
+            break
+    # 5. close(): Called explicitly when the server is stopped
+
+
+# ============================================================
+# PROGRAM 4: UDP Client (Presentation Slides 9, 11 & 13)
+# Workflow: socket(AF_INET, SOCK_DGRAM) -> sendto() -> recvfrom() -> close()
+# ============================================================
+def udp_client(port, message):
+    """
+    UDP Client routine (Presentation Slides 9, 11 & 13).
+    Workflow: socket(AF_INET, SOCK_DGRAM) -> sendto() -> recvfrom() -> close()
+    """
+    data = validate_message(message)
+    started = time.perf_counter()
+
+    # 1. socket(): Create an IPv4 UDP datagram socket ('with' guarantees close())
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+        client.settimeout(4.0)
+
+        # 2. sendto(): Send datagram directly to destination without establishing connection
+        client.sendto(data, (HOST, port))
+
+        # 3. recvfrom(): Receive echoed datagram and sender address
+        response, _ = client.recvfrom(MAX_MESSAGE)
+    # 4. close(): Handled automatically upon exiting the 'with client' block
+
+    if not response:
+        raise OSError("No response received from UDP server.")
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {
+        "message": response.decode("utf-8", errors="replace"),
+        "bytes": len(response),
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+# ============================================================
+# Server Manager (Web API Integration)
+# Keeps the server listening across separate Flask HTTP requests
+# ============================================================
 class EchoServer:
-    """Manage one loopback-only TCP or UDP echo server in a background thread."""
+    """Manage background execution, lifecycle, and logs for TCP and UDP servers."""
+
     def __init__(self, protocol):
-        """Initialize server state for the selected transport protocol."""
-        self.protocol = protocol
+        self.protocol = protocol.lower()
         self.socket = None
         self.thread = None
         self.port = None
-        self.lock = threading.Lock()
+        self.running = False
         self.logs = []
+        self.lock = threading.Lock()
 
     def log(self, message):
-        """Append a timestamped event while retaining a bounded history."""
+        """Append a timestamped event while retaining a bounded history (last 50)."""
         self.logs.append({"timestamp": now(), "message": message})
         self.logs = self.logs[-50:]
 
     def start(self):
-        """Bind a dynamic loopback port and start the non-blocking listener."""
+        """
+        Start the background server routine (tcp_server or udp_server).
+        Flask HTTP requests are short-lived. A background thread keeps the server
+        socket alive and listening across multiple separate web requests.
+        """
         with self.lock:
-            if self.thread and self.thread.is_alive():
+            if self.running and self.thread and self.thread.is_alive():
                 return
-            kind = socket.SOCK_STREAM if self.protocol == "tcp" else socket.SOCK_DGRAM
-            self.socket = socket.socket(socket.AF_INET, kind)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind((HOST, 0))
-            if self.protocol == "tcp":
-                self.socket.listen(1)
-            self.port = self.socket.getsockname()[1]
-            self.socket.settimeout(0.5)
-            self.thread = threading.Thread(target=self._run, daemon=True)
-            self.thread.start()
-            self.log(f"{self.protocol.upper()} server listening on {HOST}:{self.port}")
 
-    def _run(self):
-        """Accept TCP clients or UDP datagrams until the server is stopped."""
-        while self.socket:
-            try:
-                if self.protocol == "tcp":
-                    connection, _ = self.socket.accept()
-                    with connection:
-                        connection.settimeout(3)
-                        data = connection.recv(MAX_MESSAGE)
-                        if data:
-                            connection.sendall(data)
-                            self.log(f"Echoed {len(data)} bytes")
-                else:
-                    data, address = self.socket.recvfrom(MAX_MESSAGE)
-                    if data:
-                        self.socket.sendto(data, address)
-                        self.log(f"Echoed {len(data)} byte datagram")
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            except Exception:
-                logging.exception("Socket listener error")
-                break
+            target = tcp_server if self.protocol == "tcp" else udp_server
+            self.thread = threading.Thread(target=target, args=(self,), daemon=True)
+            self.thread.start()
+
+            # Wait briefly for server socket to bind and port to be populated
+            for _ in range(50):
+                if self.port:
+                    break
+                time.sleep(0.01)
 
     def send(self, message):
-        """Send one bounded local message and return the echoed response details."""
-        if not self.thread or not self.thread.is_alive() or not self.port:
+        """Execute the client routine (tcp_client or udp_client) and return results."""
+        if not self.running or not self.port:
             raise RuntimeError("Start the server first.")
-        if not isinstance(message, str) or not message.strip():
-            raise ValueError("Message must not be empty.")
-        data = message.encode("utf-8")
-        if len(data) > MAX_MESSAGE:
-            raise ValueError(f"Message must be at most {MAX_MESSAGE} bytes.")
-        started = time.perf_counter()
-        kind = socket.SOCK_STREAM if self.protocol == "tcp" else socket.SOCK_DGRAM
-        with socket.socket(socket.AF_INET, kind) as client:
-            client.settimeout(4)
-            client.connect((HOST, self.port)) if self.protocol == "tcp" else None
-            if self.protocol == "tcp":
-                client.sendall(data)
-                response = client.recv(MAX_MESSAGE)
-            else:
-                client.sendto(data, (HOST, self.port))
-                response, _ = client.recvfrom(MAX_MESSAGE)
-        result = {"message": response.decode("utf-8", errors="replace"), "bytes": len(response), "elapsed_ms": round((time.perf_counter() - started) * 1000, 2)}
-        self.log(f"Client exchanged {len(data)} bytes")
+
+        if self.protocol == "tcp":
+            result = tcp_client(self.port, message)
+        else:
+            result = udp_client(self.port, message)
+
+        self.log(f"Client exchanged {result['bytes']} bytes")
         return result
 
     def stop(self):
-        """Close the listener so its background thread can exit cleanly."""
+        """Signal the background server loop to stop, close socket, and join thread."""
         with self.lock:
+            was_running = self.running or (self.socket is not None)
+            self.running = False
             if self.socket:
                 try:
                     self.socket.close()
                 except OSError:
                     pass
-            self.socket = None
+                self.socket = None
+            if self.thread and self.thread.is_alive():
+                self.thread.join(timeout=1.0)
+            self.thread = None
             self.port = None
-            self.log(f"{self.protocol.upper()} server stopped")
+            if was_running:
+                self.log(f"{self.protocol.upper()} server stopped")
 
     def status(self):
-        """Report running state, dynamic port, and recent socket activity."""
-        return {"running": bool(self.thread and self.thread.is_alive() and self.socket), "port": self.port, "logs": self.logs}
+        """Report running state, dynamic port, and recent activity logs."""
+        return {
+            "running": bool(self.running and self.socket and self.port),
+            "port": self.port,
+            "logs": self.logs,
+        }
 
 
 servers = {"tcp": EchoServer("tcp"), "udp": EchoServer("udp")}

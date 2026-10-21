@@ -17,7 +17,6 @@ NetLab is a focused presentation application for two subjects: **Networking Auto
 - `app.py` — Flask backend, grouped into the two subject areas with explanatory function comments.
 - `frontend/src/main.jsx` — React views for Overview, Networking Automation, Socket Programming, Commands, and Protocols.
 - `frontend/src/styles.css` — light application shell and dark console styling.
-- `tests/test_app.py` — backend API and socket round-trip tests.
 - `demo_profile.json` — application-owned state for the reversible configuration demonstration.
 
 ## Run on this workspace
@@ -51,9 +50,3 @@ Open http://127.0.0.1:5173. The Vite development proxy sends `/api` requests to 
 6. Open Protocols to review concise definitions of common networking protocols.
 
 No API accepts arbitrary hosts, ports, or shell commands. The command terminal accepts only the read-only networking executables and arguments described by the allowlist, uses `shell=False`, and has finite timeouts. Host details reflect the backend machine, not necessarily a student's computer.
-
-## Tests
-
-```powershell
-python -m unittest discover -s tests -v
-```
