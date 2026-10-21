@@ -28,6 +28,12 @@ class NetworkLabTests(unittest.TestCase):
     def test_health(self):
         self.assertTrue(self.client.get("/api/health").json["ok"])
 
+    def test_command_catalog_is_allowlisted(self):
+        response = self.client.get("/api/commands")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(command["id"] == "ipconfig" for command in response.json["commands"]))
+        self.assertEqual(self.client.post("/api/commands/run", json={"id": "not-allowed"}).status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

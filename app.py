@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import platform
-import re
 import socket
 import subprocess
 import threading
@@ -76,37 +75,10 @@ def audit_windows():
         return [], "The host returned unreadable network data"
 
 
-def audit_linux():
-    """Collect best-effort Linux interface data without changing the host."""
-    interfaces = []
-    for path in Path("/sys/class/net").glob("*"):
-        name = path.name
-        addresses = []
-        try:
-            with open("/proc/net/fib_trie", encoding="utf-8") as source:
-                text = source.read()
-            for match in re.findall(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", text):
-                try:
-                    address = ipaddress.ip_address(match)
-                    if not address.is_unspecified and str(address) not in addresses:
-                        addresses.append(str(address) + "/32")
-                except ValueError:
-                    pass
-        except OSError:
-            pass
-        interfaces.append({"name": name, "index": None, "addresses": addresses, "gateways": [], "dns": []})
-    return interfaces, None
-
-
 def audit():
-    """Normalize OS-specific network data into the frontend audit format."""
-    source = f"{platform.system()} host"
-    if platform.system() == "Windows":
-        raw, problem = audit_windows()
-    elif platform.system() == "Linux":
-        raw, problem = audit_linux()
-    else:
-        raw, problem = [], f"Unsupported operating system: {platform.system()}"
+    """Normalize Windows network data into the frontend audit format."""
+    raw, problem = audit_windows()
+    source = "Windows host"
     items = []
     for item in raw:
         addresses = item.get("addresses", []) or []
@@ -189,10 +161,7 @@ def validate_config(entries):
 
 def check_gateway(gateway):
     """Ping one configured gateway and distinguish failure from unavailable ICMP."""
-    if platform.system() == "Windows":
-        command = ["ping", "-n", "1", "-w", "1500", gateway]
-    else:
-        command = ["ping", "-c", "1", "-W", "2", gateway]
+    command = ["ping", "-n", "1", "-w", "1500", gateway]
     try:
         result = subprocess.run(command, capture_output=True, text=True, timeout=4)
         return {"status": "pass" if result.returncode == 0 else "warning", "message": "Gateway responded to ICMP." if result.returncode == 0 else "No ICMP response; firewalls may block ping."}
@@ -225,6 +194,85 @@ def diagnostics():
         checks.append({"name": "TCP connectivity", "status": "fail", "message": str(exc)})
     status = "HEALTHY" if all(check["status"] == "pass" for check in checks) else "WARNING"
     return {"timestamp": now(), "status": status, "checks": checks, "host": audited["source"]}
+
+
+COMMANDS = {
+    "ping": {
+        "label": "Ping localhost",
+        "description": "Checks whether the local Windows TCP/IP stack responds.",
+        "args": ["ping", "-n", "4", "127.0.0.1"],
+    },
+    "ipconfig": {
+        "label": "IP configuration",
+        "description": "Shows the host's Windows network adapter configuration.",
+        "args": ["ipconfig"],
+    },
+    "tracert": {
+        "label": "Trace route",
+        "description": "Shows the route to the local host with a bounded hop count.",
+        "args": ["tracert", "-h", "5", "127.0.0.1"],
+    },
+    "nslookup": {
+        "label": "DNS lookup",
+        "description": "Looks up the fixed teaching domain example.com.",
+        "args": ["nslookup", "example.com"],
+    },
+    "arp": {
+        "label": "ARP cache",
+        "description": "Displays the local Address Resolution Protocol cache.",
+        "args": ["arp", "-a"],
+    },
+    "route": {
+        "label": "Routing table",
+        "description": "Displays the Windows IPv4 routing table.",
+        "args": ["route", "print", "-4"],
+    },
+    "netstat": {
+        "label": "Network connections",
+        "description": "Shows active connections and listening ports.",
+        "args": ["netstat", "-ano"],
+    },
+}
+
+
+def run_command(command_id):
+    """Run one fixed, read-only Windows networking command."""
+    command = COMMANDS[command_id]
+    try:
+        result = subprocess.run(
+            command["args"],
+            capture_output=True,
+            text=True,
+            encoding="oem",
+            errors="replace",
+            timeout=15,
+            shell=False,
+        )
+        output = (result.stdout + result.stderr).strip()
+        return {
+            "id": command_id,
+            "command": " ".join(command["args"]),
+            "output": output or "(Command returned no output.)",
+            "exit_code": result.returncode,
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        output = ((exc.stdout or "") + (exc.stderr or "")).strip()
+        return {
+            "id": command_id,
+            "command": " ".join(command["args"]),
+            "output": output + ("\n" if output else "") + "Command timed out after 15 seconds.",
+            "exit_code": None,
+            "timed_out": True,
+        }
+    except OSError as exc:
+        return {
+            "id": command_id,
+            "command": " ".join(command["args"]),
+            "output": f"Unable to execute command: {exc}",
+            "exit_code": None,
+            "timed_out": False,
+        }
 
 
 SAMPLE_PROFILE = {"name": "Presentation demo profile", "address": "192.168.10.25/24", "gateway": "192.168.10.1", "dns": ["1.1.1.1"]}
@@ -384,6 +432,26 @@ def network_validate():
 def network_diagnostics():
     """Run the bounded real-host diagnostics requested by the UI."""
     return jsonify({"ok": True, "diagnostics": diagnostics()})
+
+
+@app.get("/api/commands")
+def command_catalog():
+    """Return the safe, fixed Windows networking command catalog."""
+    commands = [
+        {"id": command_id, "label": command["label"], "description": command["description"], "command": " ".join(command["args"])}
+        for command_id, command in COMMANDS.items()
+    ]
+    return jsonify({"ok": True, "commands": commands})
+
+
+@app.post("/api/commands/run")
+def command_run():
+    """Execute one catalog command and return terminal-style output."""
+    payload = request.get_json(silent=True) or {}
+    command_id = payload.get("id")
+    if command_id not in COMMANDS:
+        return error("Unknown command", 404)
+    return jsonify({"ok": True, "result": run_command(command_id)})
 
 
 @app.get("/api/config-demo")
