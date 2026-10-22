@@ -1,3 +1,9 @@
+# ============================================================
+# Imports and application configuration
+# ============================================================
+# These modules provide IP-address validation, JSON handling,
+# operating-system information, sockets, subprocess execution,
+# threading, timing, and UTC timestamps.
 import ipaddress
 import json
 import logging
@@ -13,6 +19,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 
+# Create the Flask application, enable cross-origin requests,
+# limit network messages, and keep the lab service on localhost.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__)
 CORS(app)
@@ -63,6 +71,12 @@ def audit_windows():
       [PSCustomObject]@{ name=$c.InterfaceAlias; index=$c.InterfaceIndex; addresses=$addresses; gateways=$gateways; dns=$dns }
     } | ConvertTo-Json -Depth 4
     """
+
+    """
+    Collects the computer's real network configuration,
+    such as IP addresses, subnet information, default gateways, and DNS servers,
+    for every network interface
+    """
     output, problem = powershell(script)
     if problem:
         return [], problem
@@ -75,15 +89,18 @@ def audit_windows():
 
 def audit():
     """Normalize Windows network data into the frontend audit format."""
+    # Block 1: retrieve raw interface data from the Windows host.
     raw, problem = audit_windows()
     source = "Windows host"
     items = []
+    # Block 2: normalize every interface and calculate IPv4 network details.
     for item in raw:
         addresses = item.get("addresses", []) or []
         addresses = [addresses] if isinstance(addresses, str) else addresses
         parsed = []
         for value in addresses: #192.168.10.25/24
             try:
+                # Convert CIDR text into structured IP, subnet, and broadcast values.
                 interface = ipaddress.ip_interface(value)    #Calculates the following
                 parsed.append({
                     "cidr": str(interface), "ip": str(interface.ip),
@@ -106,10 +123,12 @@ def audit():
 
 def validate_config(entries):
     """Validate supplied sample interfaces, including duplicates and warnings."""
+    # Block 1: reject an empty or incorrectly shaped configuration.
     if not isinstance(entries, list) or not entries:
         return {"result": "INVALID", "findings": [{"severity": "error", "message": "Provide at least one interface entry."}]}
     findings = []
     seen = {}
+    # Block 2: validate each interface and collect errors or warnings.
     for index, entry in enumerate(entries):
         label = entry.get("name") if isinstance(entry, dict) else None
         label = label or f"Entry {index + 1}"
@@ -173,6 +192,7 @@ def diagnostics():
     # TCP connectivity to example.com:443
     """Run the bounded gateway, DNS, and TCP checks used by the lab checklist."""
     checks = []
+    # Block 1: find the first configured gateway and test ICMP reachability.
     audited = audit()
     gateways = [gateway for item in audited["interfaces"] for gateway in item["gateways"] if gateway]
     if gateways:
@@ -180,12 +200,14 @@ def diagnostics():
         checks.append({"name": "Gateway reachability", **gateway_result})
     else:
         checks.append({"name": "Gateway reachability", "status": "warning", "message": "No configured IPv4 gateway was found."})
+    # Block 2: resolve a public hostname through the configured DNS path.
     try:
         addresses = socket.getaddrinfo("example.com", 443, type=socket.SOCK_STREAM)
         resolved = sorted({item[4][0] for item in addresses})
         checks.append({"name": "DNS resolution", "status": "pass", "message": "example.com resolved successfully.", "addresses": resolved})
     except socket.gaierror as exc:
         checks.append({"name": "DNS resolution", "status": "fail", "message": str(exc)})
+    # Block 3: open a short-lived TCP connection to verify transport access.
     try:
         started = time.perf_counter()
         with socket.create_connection(("example.com", 443), timeout=4):
@@ -198,6 +220,8 @@ def diagnostics():
 
 
 COMMANDS = {
+    # A fixed allowlist keeps the command console limited
+    # to safe, read-only Windows networking commands.
     "ping": {
         "label": "Ping localhost",
         "description": "Tests local TCP/IP connectivity using ICMP echo requests.",
@@ -360,15 +384,15 @@ def tcp_server(server):
     TCP Echo Server routine (Presentation Slide 12).
     Workflow: socket() -> bind() -> listen() -> accept() -> recv() -> sendall() -> close()
     """
-    # 1. socket(): Create an IPv4 TCP stream socket
+    # Block 1: create an IPv4 TCP stream socket.
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    # 2. bind(): Attach socket to loopback IP (127.0.0.1) and dynamic port
-    # (Port 0 lets the OS pick an available port to avoid conflicts with Flask)
+    # Block 2: bind to localhost on a dynamic port.
+    # Port 0 lets the operating system choose an available port.
     srv.bind((HOST, 0))
 
-    # 3. listen(): Ready for incoming TCP client connections
+    # Block 3: listen for incoming TCP client connections.
     srv.listen(1)
 
     # Finite timeout (0.5s) allows server to check server.running periodically
@@ -381,26 +405,24 @@ def tcp_server(server):
 
     while server.running:
         try:
-            # 4. accept(): Blocks until a client connects, returning (conn, addr)
+            # Block 4: accept a client connection.
             conn, addr = srv.accept()
         except socket.timeout:
             continue
         except OSError:
             break
 
-        # 5. recv() & 6. sendall(): Handle the connected client
+        # Block 5: receive the message and echo it back to the client.
         with conn:
             conn.settimeout(3.0)
             try:
-                # recv(1024): Read incoming bytes from the TCP byte stream
-                # For short classroom demo messages, a single recv() reads the complete message
                 data = conn.recv(MAX_MESSAGE)
                 if data:
                     conn.sendall(data)
                     server.log(f"Echoed {len(data)} bytes")
             except (socket.timeout, OSError) as exc:
                 server.log(f"TCP client error: {exc}")
-        # 7. close(): Handled automatically by the 'with conn' context manager
+        # Block 6: close the client connection automatically with the context manager.
 
 
 # ============================================================
@@ -415,19 +437,17 @@ def tcp_client(port, message):
     data = validate_message(message)
     started = time.perf_counter()
 
-    # 1. socket(): Create an IPv4 TCP stream socket ('with' guarantees close())
+    # Block 1: create a TCP socket and guarantee cleanup with a context manager.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
         client.settimeout(4.0)
 
-        # 2. connect(): Establish connection to the server (3-way TCP handshake)
+        # Block 2: connect to the server using the TCP three-way handshake.
         client.connect((HOST, port))
 
-        # 3. sendall(): Send the message bytes
+        # Block 3: send the message and receive the echoed response.
         client.sendall(data)
-
-        # 4. recv(): Receive the echoed response bytes from the server
         response = client.recv(MAX_MESSAGE)
-    # 5. close(): Handled automatically upon exiting the 'with client' block
+    # Block 4: close the socket automatically after the exchange.
 
     if not response:
         raise OSError("No response received from TCP server.")
@@ -449,10 +469,10 @@ def udp_server(server):
     UDP Echo Server routine (Presentation Slide 13).
     Workflow: socket(AF_INET, SOCK_DGRAM) -> bind() -> recvfrom() -> sendto() -> close()
     """
-    # 1. socket(): Create an IPv4 UDP datagram socket
+    # Block 1: create an IPv4 UDP datagram socket.
     srv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    # 2. bind(): Attach socket to loopback IP (127.0.0.1) and dynamic port
+    # Block 2: bind to localhost on a dynamic port.
     srv.bind((HOST, 0))
 
     # Finite timeout (0.5s) allows server to check server.running periodically
@@ -465,17 +485,17 @@ def udp_server(server):
 
     while server.running:
         try:
-            # 3. recvfrom(): Wait for datagram; returns (data, addr)
+            # Block 3: receive a datagram and the sender address.
             data, addr = srv.recvfrom(MAX_MESSAGE)
             if data:
-                # 4. sendto(): Send datagram bytes directly to sender address
+                # Block 4: echo the datagram directly to its sender.
                 srv.sendto(data, addr)
                 server.log(f"Echoed {len(data)} byte datagram")
         except socket.timeout:
             continue
         except OSError:
             break
-    # 5. close(): Called explicitly when the server is stopped
+    # Block 5: the manager closes the socket when the server is stopped.
 
 
 # ============================================================
@@ -490,16 +510,16 @@ def udp_client(port, message):
     data = validate_message(message)
     started = time.perf_counter()
 
-    # 1. socket(): Create an IPv4 UDP datagram socket ('with' guarantees close())
+    # Block 1: create a UDP socket and guarantee cleanup with a context manager.
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
         client.settimeout(4.0)
 
-        # 2. sendto(): Send datagram directly to destination without establishing connection
+        # Block 2: send a datagram without establishing a connection.
         client.sendto(data, (HOST, port))
 
-        # 3. recvfrom(): Receive echoed datagram and sender address
+        # Block 3: receive the echoed datagram and sender address.
         response, _ = client.recvfrom(MAX_MESSAGE)
-    # 4. close(): Handled automatically upon exiting the 'with client' block
+    # Block 4: close the socket automatically after the exchange.
 
     if not response:
         raise OSError("No response received from UDP server.")
@@ -520,6 +540,8 @@ class EchoServer:
     """Manage background execution, lifecycle, and logs for TCP and UDP servers."""
 
     def __init__(self, protocol):
+        # Store the selected protocol and the state shared by the worker thread
+        # and Flask requests.
         self.protocol = protocol.lower()
         self.socket = None
         self.thread = None
@@ -539,10 +561,12 @@ class EchoServer:
         Flask HTTP requests are short-lived. A background thread keeps the server
         socket alive and listening across multiple separate web requests.
         """
+        # Block 1: prevent duplicate server threads.
         with self.lock:
             if self.running and self.thread and self.thread.is_alive():
                 return
 
+            # Block 2: choose the protocol routine and run it in the background.
             target = tcp_server if self.protocol == "tcp" else udp_server
             self.thread = threading.Thread(target=target, args=(self,), daemon=True)
             self.thread.start()
@@ -555,6 +579,7 @@ class EchoServer:
 
     def send(self, message):
         """Execute the client routine (tcp_client or udp_client) and return results."""
+        # Use the matching client to send a message through the running server.
         if not self.running or not self.port:
             raise RuntimeError("Start the server first.")
 
@@ -568,6 +593,7 @@ class EchoServer:
 
     def stop(self):
         """Signal the background server loop to stop, close socket, and join thread."""
+        # Signal the loop, close its socket, and wait briefly for the thread to exit.
         with self.lock:
             was_running = self.running or (self.socket is not None)
             self.running = False
@@ -602,18 +628,21 @@ servers = {"tcp": EchoServer("tcp"), "udp": EchoServer("udp")}
 
 @app.get("/api/health")
 def health():
+    # Basic service check used by the frontend to confirm the backend is online.
     """Report that the Flask service is available."""
     return jsonify({"ok": True, "service": "NetLab backend", "timestamp": now()})
 
 
 @app.get("/api/host-info")
 def host_info():
+    # Return display-safe host details for the lab header.
     """Return non-sensitive runtime information for the lab header."""
     return jsonify({"ok": True, "hostname": socket.gethostname(), "platform": platform.platform(), "python": platform.python_version()})
 
 
 @app.get("/api/network/audit")
 def network_audit():
+    # Collect and return the backend machine's current network configuration.
     """Expose the read-only audit of the backend host."""
     return jsonify({"ok": True, "audit": audit()})
 
@@ -621,6 +650,7 @@ def network_audit():
 
 @app.post("/api/network/validate")
 def network_validate():
+    # Read submitted interface data and return validation findings.
     """Validate the interface configuration submitted by the UI."""
     payload = request.get_json(silent=True) or {}
     return jsonify({"ok": True, "validation": validate_config(payload.get("interfaces"))})
@@ -628,12 +658,14 @@ def network_validate():
 
 @app.post("/api/network/diagnostics")
 def network_diagnostics():
+    # Run live gateway, DNS, and TCP checks and return their statuses.
     """Run the bounded real-host diagnostics requested by the UI."""
     return jsonify({"ok": True, "diagnostics": diagnostics()})
 
 
 @app.get("/api/commands")
 def command_catalog():
+    # Present the fixed command allowlist so the UI can build its command menu.
     """Return the safe, fixed Windows networking command catalog."""
     commands = [
         {"id": command_id, "label": command["label"], "description": command["description"], "command": " ".join(command["args"])}
@@ -644,6 +676,7 @@ def command_catalog():
 
 @app.post("/api/commands/run")
 def command_run():
+    # Execute a command selected from the predefined catalog.
     """Execute one catalog command and return terminal-style output."""
     payload = request.get_json(silent=True) or {}
     command_id = payload.get("id")
@@ -654,6 +687,7 @@ def command_run():
 
 @app.post("/api/commands/execute")
 def command_execute():
+    # Validate a custom command before passing it to the bounded runner.
     """Execute a user-entered command after applying the networking allowlist."""
     payload = request.get_json(silent=True) or {}
     try:
@@ -669,12 +703,14 @@ def command_execute():
 
 @app.get("/api/socket/status")
 def socket_status():
+    # Return the current state of both background echo servers.
     """Return the current state and logs for both local echo servers."""
     return jsonify({"ok": True, "tcp": servers["tcp"].status(), "udp": servers["udp"].status()})
 
 
 def socket_action(protocol, action):
     """Dispatch a validated start, stop, or send action to one echo server."""
+    # Route start, stop, and send requests to the selected protocol manager.
     server = servers[protocol]
     try:
         if action == "start":
@@ -691,17 +727,20 @@ def socket_action(protocol, action):
 
 @app.post("/api/socket/tcp/<action>")
 def tcp_action(action):
+    # Accept only the three supported TCP actions.
     """Handle TCP echo server actions without exposing a public listener."""
     return socket_action("tcp", action) if action in {"start", "stop", "send"} else error("Unknown TCP action", 404)
 
 
 @app.post("/api/socket/udp/<action>")
 def udp_action(action):
+    # Accept only the three supported UDP actions.
     """Handle UDP echo server actions without exposing a public listener."""
     return socket_action("udp", action) if action in {"start", "stop", "send"} else error("Unknown UDP action", 404)
 
 
 if __name__ == "__main__":
+    # Start the Flask development server when this file is run directly.
     app.run(host="127.0.0.1", port=int(os.getenv("PORT", "5000")), debug=False)
 
 """
