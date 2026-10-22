@@ -82,9 +82,9 @@ def audit():
         addresses = item.get("addresses", []) or []
         addresses = [addresses] if isinstance(addresses, str) else addresses
         parsed = []
-        for value in addresses:
+        for value in addresses: #192.168.10.25/24
             try:
-                interface = ipaddress.ip_interface(value)
+                interface = ipaddress.ip_interface(value)    #Calculates the following
                 parsed.append({
                     "cidr": str(interface), "ip": str(interface.ip),
                     "prefix": interface.network.prefixlen, "network": str(interface.network),
@@ -93,7 +93,7 @@ def audit():
                 })
             except ValueError:
                 parsed.append({"cidr": str(value), "error": "Invalid IPv4 address"})
-        items.append({
+        items.append({ #Mostly each is an array
             "name": item.get("name") or item.get("Interface") or "Unknown",
             "index": item.get("index") if item.get("index") is not None else item.get("Index"),
             "status": "Available",
@@ -168,6 +168,9 @@ def check_gateway(gateway):
 
 
 def diagnostics():
+    # Checks Gateway reachability
+    # DNS resolution
+    # TCP connectivity to example.com:443
     """Run the bounded gateway, DNS, and TCP checks used by the lab checklist."""
     checks = []
     audited = audit()
@@ -699,3 +702,17 @@ def udp_action(action):
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=int(os.getenv("PORT", "5000")), debug=False)
+
+"""
+/api/health -	GET	Checks whether the backend service is available.
+/api/host-info -	GET	Returns hostname, operating system, and Python version.
+/api/network/audit -	GET	Collects and returns network audit information.
+/api/network/validate - 	POST	Validates submitted interface settings.
+/api/network/diagnostics - 	POST	Runs the network diagnostic checks.
+/api/commands - 	GET	Returns the available networking commands.
+/api/commands/run - 	POST	Executes a selected command and returns its output.
+/api/config-demo - 	GET	Returns the sample configuration profile.
+/api/config-demo/apply - 	POST	Validates and saves a proposed demo configuration.
+/api/config-demo/revert - 	POST	Restores the original demo configuration.
+
+"""
