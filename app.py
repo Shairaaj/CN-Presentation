@@ -10,7 +10,6 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -19,7 +18,6 @@ from flask_cors import CORS
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__)
 CORS(app)
-DATA_FILE = Path(__file__).with_name("demo_profile.json")
 MAX_MESSAGE = 4096
 HOST = "127.0.0.1"
 
@@ -339,24 +337,6 @@ def parse_custom_command(command_line):
     return args
 
 
-SAMPLE_PROFILE = {"name": "Presentation demo profile", "address": "192.168.10.25/24", "gateway": "192.168.10.1", "dns": ["1.1.1.1"]}
-
-
-def load_profile():
-    """Load the application-owned demo profile or return its safe default."""
-    try:
-        if DATA_FILE.exists():
-            return json.loads(DATA_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        logging.exception("Could not read demo profile")
-    return {"original": SAMPLE_PROFILE, "current": SAMPLE_PROFILE, "changes": []}
-
-
-def save_profile(profile):
-    """Persist only the isolated demo profile, never operating-system settings."""
-    DATA_FILE.write_text(json.dumps(profile, indent=2), encoding="utf-8")
-
-
 # ============================================================
 # Socket Programming with Python
 # ============================================================
@@ -527,39 +507,6 @@ def command_execute():
     except ValueError as exc:
         return error(str(exc), 400)
     return jsonify({"ok": True, "result": run_command("custom", args)})
-
-
-@app.get("/api/config-demo")
-def config_demo():
-    """Return the current isolated configuration demonstration profile."""
-    return jsonify({"ok": True, "profile": load_profile()})
-
-
-@app.post("/api/config-demo/apply")
-def config_apply():
-    """Validate and apply a proposed change to the isolated demo profile."""
-    payload = request.get_json(silent=True) or {}
-    proposed = payload.get("profile")
-    if not isinstance(proposed, dict):
-        return error("A profile object is required")
-    validation = validate_config([proposed])
-    if validation["result"] == "INVALID":
-        return jsonify({"ok": False, "validation": validation}), 400
-    profile = load_profile()
-    profile["current"] = proposed
-    profile["changes"].append({"timestamp": now(), "action": "Applied to isolated demo profile", "profile": proposed})
-    save_profile(profile)
-    return jsonify({"ok": True, "profile": profile, "boundary": "Demo profile only; the operating system network adapter was not changed."})
-
-
-@app.post("/api/config-demo/revert")
-def config_revert():
-    """Restore the original isolated profile and record that restoration."""
-    profile = load_profile()
-    profile["current"] = profile["original"]
-    profile["changes"].append({"timestamp": now(), "action": "Restored isolated demo profile"})
-    save_profile(profile)
-    return jsonify({"ok": True, "profile": profile, "boundary": "Demo profile only; the operating system network adapter was not changed."})
 
 
 # ============================================================

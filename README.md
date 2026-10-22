@@ -7,7 +7,6 @@ NetLab is a focused presentation application for two subjects: **Networking Auto
 - Read-only audit of the Windows machine hosting the backend using PowerShell.
 - IPv4/CIDR validation, duplicate detection, gateway/subnet checks, DNS validation, and link-local warnings.
 - Bounded DNS, TCP, and gateway diagnostics with honest unavailable/inconclusive states.
-- Reversible application-owned demo profile; it never changes an operating-system adapter.
 - Real loopback-only TCP and UDP echo servers with dynamic ports, byte counts, and logs.
 - Windows networking command demonstrations with backend terminal output, including a validated command terminal for custom read-only requests.
 - Definitions for common networking protocols: TCP, UDP, HTTP, DNS, DHCP, and ARP.
@@ -18,7 +17,6 @@ NetLab is a focused presentation application for two subjects: **Networking Auto
 - `frontend/src/main.jsx` — React views for Overview, Networking Automation, Socket Programming, Commands, and Protocols.
 - `frontend/src/styles.css` — light application shell and dark console styling.
 - `tests/test_app.py` — backend API and socket round-trip tests.
-- `demo_profile.json` — application-owned state for the reversible configuration demonstration.
 
 ## Run on this workspace
 
@@ -43,12 +41,11 @@ Open http://127.0.0.1:5173. The Vite development proxy sends `/api` requests to 
 
 ## Presentation flow
 
-1. Overview: explain the real-host versus isolated-demo boundary.
+1. Overview: explain the real-host boundary.
 2. Networking Automation: refresh the audit, load the sample validator, and show the deliberate duplicate result.
 3. Run diagnostics and explain that ICMP can be blocked without proving the network is broken.
-4. Change the demo profile and restore it; confirm the OS adapter is untouched.
-5. Open Commands to run a safe, fixed Windows networking command and explain its terminal output.
-6. Open Protocols to review concise definitions of common networking protocols.
+4. Open Commands to run a safe, fixed Windows networking command and explain its terminal output.
+5. Open Protocols to review concise definitions of common networking protocols.
 
 No API accepts arbitrary hosts, ports, or shell commands. The command terminal accepts only the read-only networking executables and arguments described by the allowlist, uses `shell=False`, and has finite timeouts. Host details reflect the backend machine, not necessarily a student's computer.
 
