@@ -200,37 +200,37 @@ def diagnostics():
 COMMANDS = {
     "ping": {
         "label": "Ping localhost",
-        "description": "Checks whether the local Windows TCP/IP stack responds.",
+        "description": "Tests local TCP/IP connectivity using ICMP echo requests.",
         "args": ["ping", "-n", "4", "127.0.0.1"],
     },
     "ipconfig": {
         "label": "IP configuration",
-        "description": "Shows the host's Windows network adapter configuration.",
+        "description": "Displays IP addresses, subnet masks, and gateways for network adapters.",
         "args": ["ipconfig"],
     },
     "tracert": {
         "label": "Trace route",
-        "description": "Shows the route to the local host with a bounded hop count.",
+        "description": "Traces the network path to localhost, limited to 5 hops.",
         "args": ["tracert", "-h", "5", "127.0.0.1"],
     },
     "nslookup": {
         "label": "DNS lookup",
-        "description": "Looks up the fixed teaching domain example.com.",
+        "description": "Queries DNS servers to resolve example.com to an IP address.",
         "args": ["nslookup", "example.com"],
     },
     "arp": {
         "label": "ARP cache",
-        "description": "Displays the local Address Resolution Protocol cache.",
+        "description": "Lists cached IP-to-MAC address mappings on the local network.",
         "args": ["arp", "-a"],
     },
     "route": {
         "label": "Routing table",
-        "description": "Displays the Windows IPv4 routing table.",
+        "description": "Displays IPv4 routes used to forward network traffic.",
         "args": ["route", "print", "-4"],
     },
     "netstat": {
         "label": "Network connections",
-        "description": "Shows active connections and listening ports.",
+        "description": "Lists active connections, listening ports, and associated process IDs.",
         "args": ["netstat", "-ano"],
     },
 }
@@ -616,6 +616,7 @@ def host_info():
 def network_audit():
     """Expose the read-only audit of the backend host."""
     return jsonify({"ok": True, "audit": audit()})
+
 
 
 @app.post("/api/network/validate")
