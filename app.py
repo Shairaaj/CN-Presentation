@@ -9,6 +9,8 @@ import json
 import logging
 import os
 import platform
+import re
+import shlex
 import socket
 import subprocess
 import threading
@@ -93,7 +95,7 @@ def audit():
     raw, problem = audit_windows()
     source = "Windows host"
     items = []
-    # Block 2: normalize every interface and calculate IPv4 network details.
+    # Block 2: for every interface and calculate IPv4 network details.
     for item in raw:
         addresses = item.get("addresses", []) or []
         addresses = [addresses] if isinstance(addresses, str) else addresses
@@ -224,7 +226,8 @@ COMMANDS = {
     # to safe, read-only Windows networking commands.
     "ping": {
         "label": "Ping localhost",
-        "description": "Tests local TCP/IP connectivity using ICMP echo requests.",
+        "description": """to test the reachability of a host (like a website, server, or router) across an Internet Protocol (IP) network and to measure
+        the round-trip time (RTT) it takes for data to travel""",
         "args": ["ping", "-n", "4", "127.0.0.1"],
     },
     "ipconfig": {
@@ -234,23 +237,18 @@ COMMANDS = {
     },
     "tracert": {
         "label": "Trace route",
-        "description": "Traces the network path to localhost, limited to 5 hops.",
+        "description": "Traces the number of hops to reach the specified IP address, here it is limited to 5 hops.",
         "args": ["tracert", "-h", "5", "127.0.0.1"],
     },
     "nslookup": {
         "label": "DNS lookup",
-        "description": "Queries DNS servers to resolve example.com to an IP address.",
+        "description": "Queries DNS servers to resolve specified domain name to an IP address.",
         "args": ["nslookup", "example.com"],
     },
     "arp": {
         "label": "ARP cache",
         "description": "Lists cached IP-to-MAC address mappings on the local network.",
         "args": ["arp", "-a"],
-    },
-    "route": {
-        "label": "Routing table",
-        "description": "Displays IPv4 routes used to forward network traffic.",
-        "args": ["route", "print", "-4"],
     },
     "netstat": {
         "label": "Network connections",
@@ -260,9 +258,9 @@ COMMANDS = {
 }
 
 
-def run_command(command_id):
+def run_command(command_id, command_args=None):
     """Run one fixed, read-only Windows networking command."""
-    command = COMMANDS[command_id]
+    command = {"args": command_args} if command_args is not None else COMMANDS[command_id]
     try:
         result = subprocess.run(
             command["args"],
