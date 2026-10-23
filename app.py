@@ -112,7 +112,7 @@ def audit():
                 })
             except ValueError:
                 parsed.append({"cidr": str(value), "error": "Invalid IPv4 address"})
-        items.append({ #Mostly each is an array
+        items.append({ #Each interface is represented as a dictionary with its name, index, status, addresses, gateways, and DNS servers.
             "name": item.get("name") or item.get("Interface") or "Unknown",
             "index": item.get("index") if item.get("index") is not None else item.get("Index"),
             "status": "Available",
@@ -130,13 +130,14 @@ def validate_config(entries):
         return {"result": "INVALID", "findings": [{"severity": "error", "message": "Provide at least one interface entry."}]}
     findings = []
     seen = {}
-    # Block 2: validate each interface and collect errors or warnings.
+    # Block 2: validate for each 0...n entries and its interfaces and collect errors or warnings.
     for index, entry in enumerate(entries):
         label = entry.get("name") if isinstance(entry, dict) else None
         label = label or f"Entry {index + 1}"
         if not isinstance(entry, dict) or not entry.get("address"):
             findings.append({"severity": "error", "entry": label, "message": "Missing IPv4 address/CIDR."})
             continue
+        #Starts here: Validate the IPv4 address and CIDR prefix using the ipaddress module. If the address is invalid or not IPv4, an error is recorded. Duplicate addresses are also checked, and warnings are issued for link-local addresses and gateway issues.
         try:
             interface = ipaddress.ip_interface(entry["address"])
             if interface.version != 4:
@@ -198,12 +199,14 @@ def diagnostics():
     audited = audit()
     gateways = [gateway for item in audited["interfaces"] for gateway in item["gateways"] if gateway]
     if gateways:
+        #1. First Check: Gateway reachability. It pings the first configured gateway and records the result.
         gateway_result = check_gateway(str(gateways[0]))
         checks.append({"name": "Gateway reachability", **gateway_result})
     else:
         checks.append({"name": "Gateway reachability", "status": "warning", "message": "No configured IPv4 gateway was found."})
     # Block 2: resolve a public hostname through the configured DNS path.
     try:
+        #2. Second Check: DNS resolution. It attempts to resolve "example.com" to verify that DNS is functioning correctly.
         addresses = socket.getaddrinfo("example.com", 443, type=socket.SOCK_STREAM)
         resolved = sorted({item[4][0] for item in addresses})
         checks.append({"name": "DNS resolution", "status": "pass", "message": "example.com resolved successfully.", "addresses": resolved})
@@ -212,6 +215,7 @@ def diagnostics():
     # Block 3: open a short-lived TCP connection to verify transport access.
     try:
         started = time.perf_counter()
+        #3. Third Check: TCP connectivity. It attempts to create a TCP connection to "example.com" on port 443 to ensure that the transport layer is accessible.
         with socket.create_connection(("example.com", 443), timeout=4):
             pass
         checks.append({"name": "TCP connectivity", "status": "pass", "message": "TCP connection to example.com:443 succeeded.", "elapsed_ms": round((time.perf_counter() - started) * 1000, 2)})
